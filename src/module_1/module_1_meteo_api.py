@@ -6,6 +6,7 @@ import os
 
 # flake8: noqa E501
 # import time
+# import pandas
 
 API_URL = "https://climate-api.open-meteo.com/v1/climate?"
 COORDINATES = {
