@@ -6,6 +6,9 @@ __pycache__/
 # Own folders
 Plots
 
+# Files
+*.png
+
 # C extensions
 *.so
 *.txt
