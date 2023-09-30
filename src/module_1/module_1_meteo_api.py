@@ -8,7 +8,6 @@ import requests
 import time
 
 
-
 logger = logging.getLogger(__name__)
 
 logger.level = logging.INFO
@@ -28,10 +27,7 @@ MODELS = (
 )
 
 
-
-
 def get_data_meteo_api(city, start_date, end_date):
-
     """
     Get API url based on city, start_date and end date
     """
@@ -70,7 +66,6 @@ def _request_with_cooloff(api_url, num_attempts):
             else:
                 raise
 
-
         except requests.exceptions.HTTPError as e:
             logger.warning(e)
             if response.status_code == 404:
@@ -87,17 +82,15 @@ def _request_with_cooloff(api_url, num_attempts):
 
         # We got through the loop without error so we've received a valid response
         return response
-    
+
+
 def request_with_cooloff(url, num_attempts=10):
-    return json.loads(_request_with_cooloff(url,num_attempts).content.decode("utf-8"))
-
-            
-
+    return json.loads(_request_with_cooloff(url, num_attempts).content.decode("utf-8"))
 
 
 def get_yearly_mean_std(data_dict, variable_dict):
     """
-    Get a df with yearly mean and std for every variable 
+    Get a df with yearly mean and std for every variable
     """
 
     df = pd.DataFrame(data_dict["daily"], index=pd.to_datetime(data_dict["daily"]["time"]))
@@ -108,72 +101,64 @@ def get_yearly_mean_std(data_dict, variable_dict):
         df[variable] = df[variable_columns].mean(axis=1)
         df.drop(columns=variable_columns, inplace=True)
 
-    return df.groupby(df.index.year).agg(['mean', 'std'])
+    return df.groupby(df.index.year).agg(["mean", "std"])
 
 
 def plot_data(df, variable_dict, city):
     """
-    Plot variables for every city 
+    Plot variables for every city
     """
 
     fig, axes = plt.subplots(3, 1, figsize=(12, 8))
 
     for axe, variable, unit in zip(axes, variable_dict.keys(), variable_dict.values()):
-
         init_year = df.index[0]
         end_year = df.index[-1]
         axe.set_title(variable)
         axe.set_ylabel(unit)
 
-        axe.plot(df[variable]["mean"], '-b', label="mean")
-        axe.plot(df[variable]["mean"] + df[variable]["std"], '--r', label="std")
-        axe.plot(df[variable]["mean"] - df[variable]["std"], '--r')
+        axe.plot(df[variable]["mean"], "-b", label="mean")
+        axe.plot(df[variable]["mean"] + df[variable]["std"], "--r", label="std")
+        axe.plot(df[variable]["mean"] - df[variable]["std"], "--r")
         axe.set_xticks([])
         axe.legend()
 
-    custom_xticks = [
-        year for year in range(init_year, end_year, 5)
-    ]  # x label with two years spans
+    custom_xticks = [year for year in range(init_year, end_year, 5)]  # x label with two years spans
 
-    custom_xticks_labels = [
-        str(year) for year in custom_xticks
-    ]  # x label with two years spans
+    custom_xticks_labels = [str(year) for year in custom_xticks]  # x label with two years spans
 
     axes[-1].set_xticks(custom_xticks)
     axes[-1].set_xticklabels(labels=custom_xticks_labels)
     plt.xticks(fontsize=10)
     plt.xticks(rotation=45)
-    
+
     # Modify additional parameters for the entire figure
     fig.suptitle(city, fontsize=16)
-    plt.savefig(f"{city}.png")
+    plt.savefig(f"src/module_1/{city}.png")
     plt.close()
 
 
 def main():
-
     start_date = "1950-01-01"
     end_date = "2049-12-31"
 
     cities = COORDINATES.keys()
 
-
     for city in cities:
         data_dict = get_data_meteo_api(city, start_date, end_date)
-        #data_dict = api_request(api_url)
 
         variable_dict = {}
 
         for variable in VARIABLES.split(","):
-            value = next((value for key,value in data_dict["daily_units"].items() if variable in key), None)
+            value = next(
+                (value for key, value in data_dict["daily_units"].items() if variable in key), None
+            )
             variable_dict[variable] = value
             # 'temperature_2m_mean': '°C'
 
         df = get_yearly_mean_std(data_dict, variable_dict)
         plot_data(df, variable_dict, city)
 
-if __name__ == "__main__":
-    main()
 
 if __name__ == "__main__":
     main()
