@@ -1,9 +1,17 @@
-import requests
+import json
+import logging
 import matplotlib.pyplot as plt
 import numpy as np
-import time
 import os
+import pandas as pd
+import requests
+import time
 
+
+
+logger = logging.getLogger(__name__)
+
+logger.level = logging.INFO
 # flake8: noqa E501
 # import time
 # import pandas
@@ -19,15 +27,15 @@ MODELS = (
     "CMCC_CM2_VHR4,FGOALS_f3_H,HiRAM_SIT_HR," "MRI_AGCM3_2_S,EC_Earth3P_HR,MPI_ESM1_2_XR,NICAM16_8S"
 )
 
-SLEEP_REQUEST = 1
 
-
-DATA_FOLDER_NAME = "src/module_1/Plots"
-if os.path.exists(DATA_FOLDER_NAME) is False:
-    os.makedirs(DATA_FOLDER_NAME)
 
 
 def get_data_meteo_api(city, start_date, end_date):
+
+    """
+    Get API url based on city, start_date and end date
+    """
+
     city_dict = COORDINATES[city]
     latitude = city_dict["latitude"]
     longitude = city_dict["longitude"]
@@ -40,118 +48,132 @@ def get_data_meteo_api(city, start_date, end_date):
         f"&daily={VARIABLES}"
     )
 
-    return api_url
+    return request_with_cooloff(api_url)
 
 
-def api_request(api_url):
-    n_tries = 100
+def _request_with_cooloff(api_url, num_attempts):
+    cooloff = 1
 
-    for _ in range(n_tries):
-        response = requests.get(api_url)
-        time.sleep(SLEEP_REQUEST)
+    for call_count in range(cooloff):
+        try:
+            response = requests.get(api_url)
+            response.raise_for_status()
 
-        if response.status_code == 200:
-            data = response.json()
-            return data
-
-        elif response.status_code == 404:
-            print("The data you requested does not exist. Trying again")
-
-        elif response.status_code == 401:
-            print("You are not authorized to request this data. Trying again")
-
-        else:
-            print("Error. Trying again")
+        except requests.exceptions.ConnectionError as e:
+            logger.info("API refused the connection")
+            logger.warning(e)
+            if call_count != (num_attempts - 1):
+                time.sleep(cooloff)
+                cooloff *= 2
+                call_count += 1
+                continue
+            else:
+                raise
 
 
-def plot_mean_and_dev(mean_data, anual_mean_values, time, city, variable, model, plot_folder):
-    y_values = anual_mean_values.values()  # Yearly mean data
-    x_values = anual_mean_values.keys()  # Years
+        except requests.exceptions.HTTPError as e:
+            logger.warning(e)
+            if response.status_code == 404:
+                raise
 
-    init_year = int(list(x_values)[0])  # Gets the first year of dataset
-    end_year = int(list(x_values)[-1])  # Gets the last year of dataset
+            logger.info(f"API return code {response.status_code} cooloff at {cooloff}")
+            if call_count != (num_attempts - 1):
+                time.sleep(cooloff)
+                cooloff *= 2
+                call_count += 1
+                continue
+            else:
+                raise
 
-    custom_x_labels = [
-        str(year) for year in range(init_year, end_year, 2)
+        # We got through the loop without error so we've received a valid response
+        return response
+    
+def request_with_cooloff(url, num_attempts=10):
+    return json.loads(_request_with_cooloff(url,num_attempts).content.decode("utf-8"))
+
+            
+
+
+
+def get_yearly_mean_std(data_dict, variable_dict):
+    """
+    Get a df with yearly mean and std for every variable 
+    """
+
+    df = pd.DataFrame(data_dict["daily"], index=pd.to_datetime(data_dict["daily"]["time"]))
+    df.drop(columns="time", inplace=True)
+
+    for variable in variable_dict.keys():
+        variable_columns = [column for column in df.columns if variable in column]
+        df[variable] = df[variable_columns].mean(axis=1)
+        df.drop(columns=variable_columns, inplace=True)
+
+    return df.groupby(df.index.year).agg(['mean', 'std'])
+
+
+def plot_data(df, variable_dict, city):
+    """
+    Plot variables for every city 
+    """
+
+    fig, axes = plt.subplots(3, 1, figsize=(12, 8))
+
+    for axe, variable, unit in zip(axes, variable_dict.keys(), variable_dict.values()):
+
+        init_year = df.index[0]
+        end_year = df.index[-1]
+        axe.set_title(variable)
+        axe.set_ylabel(unit)
+
+        axe.plot(df[variable]["mean"], '-b', label="mean")
+        axe.plot(df[variable]["mean"] + df[variable]["std"], '--r', label="std")
+        axe.plot(df[variable]["mean"] - df[variable]["std"], '--r')
+        axe.set_xticks([])
+        axe.legend()
+
+    custom_xticks = [
+        year for year in range(init_year, end_year, 5)
     ]  # x label with two years spans
 
-    plt.figure(figsize=(12, 8))
-    plt.scatter(x_values, y_values, label="Dispersion", color="r")
-    plt.axhline(y=mean_data, color="b", linestyle="--", label="Mean value")
-    plt.xlabel("Time")
-    plt.ylabel(variable)
+    custom_xticks_labels = [
+        str(year) for year in custom_xticks
+    ]  # x label with two years spans
+
+    axes[-1].set_xticks(custom_xticks)
+    axes[-1].set_xticklabels(labels=custom_xticks_labels)
     plt.xticks(fontsize=10)
     plt.xticks(rotation=45)
-    plt.xticks(custom_x_labels, custom_x_labels)
-    plt.title(f"Yearly mean deviation. City: {city}. Model: {model}")
-    pic_filename = f"{plot_folder}/{city}_{variable}_{model}.png"
-    plt.legend()
-    plt.savefig(pic_filename)
+    
+    # Modify additional parameters for the entire figure
+    fig.suptitle(city, fontsize=16)
+    plt.savefig(f"{city}.png")
     plt.close()
 
 
 def main():
+
     start_date = "1950-01-01"
     end_date = "2049-12-31"
 
     cities = COORDINATES.keys()
 
-    list_variables = VARIABLES.split(",")
-    list_models = MODELS.split(",")
 
     for city in cities:
-        plot_folder = f"{DATA_FOLDER_NAME}/{city}"
-        if os.path.exists(plot_folder) is False:
-            os.makedirs(plot_folder)
+        data_dict = get_data_meteo_api(city, start_date, end_date)
+        #data_dict = api_request(api_url)
 
-        api_url = get_data_meteo_api(city, start_date, end_date)
-        data_dict = api_request(api_url)
+        variable_dict = {}
 
-        for variable in list_variables:
-            for model in list_models:
-                # model = "CMCC_CM2_VHR4"
-                # variable = "soil_moisture_0_to_10cm_mean"
+        for variable in VARIABLES.split(","):
+            value = next((value for key,value in data_dict["daily_units"].items() if variable in key), None)
+            variable_dict[variable] = value
+            # 'temperature_2m_mean': '°C'
 
-                print(city, model, variable)
+        df = get_yearly_mean_std(data_dict, variable_dict)
+        plot_data(df, variable_dict, city)
 
-                data_key = f"{variable}_{model}"
-
-                if data_dict:  # If code != 200, data_dict = None
-                    data = data_dict["daily"][data_key]
-                    time = data_dict["daily"]["time"]
-                    try:
-                        mean_data = np.mean(data)
-                    except TypeError:
-                        print(f"{variable} for {model} does not exist. Skip")
-                        break
-
-                    sum_year_values = {}
-                    count_year_values = {}
-
-                    for value, date in zip(data, time):
-                        year = date.split("-")[0]
-
-                        if year in sum_year_values.keys():
-                            sum_year_values[year] += value
-                            count_year_values[year] += 1
-
-                        else:
-                            sum_year_values[year] = value
-                            count_year_values[year] = 1
-
-                    anual_mean_values = {
-                        year: (sum / count)
-                        for year, sum, count in zip(
-                            sum_year_values.keys(),
-                            sum_year_values.values(),
-                            count_year_values.values(),
-                        )
-                    }  # Gets the anual dispersion from the mean
-
-                    plot_mean_and_dev(
-                        mean_data, anual_mean_values, time, city, variable, model, plot_folder
-                    )
-
+if __name__ == "__main__":
+    main()
 
 if __name__ == "__main__":
     main()
