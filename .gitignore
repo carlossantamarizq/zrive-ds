@@ -8,6 +8,8 @@ __pycache__/
 *.csv
 *.txt
 
+*.parquet
+
 # Distribution / packaging
 .Python
 build/
