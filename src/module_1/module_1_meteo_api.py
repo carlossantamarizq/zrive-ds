@@ -15,19 +15,20 @@ logger.level = logging.INFO
 # import time
 # import pandas
 
-API_URL = "https://climate-api.open-meteo.com/v1/climate?"
-COORDINATES = {
+API_URL: str = "https://climate-api.open-meteo.com/v1/climate?"
+
+COORDINATES: dict = {
     "Madrid": {"latitude": 40.416775, "longitude": -3.703790},
     "London": {"latitude": 51.507351, "longitude": -0.127758},
     "Rio": {"latitude": -22.906847, "longitude": -43.172896},
 }
-VARIABLES = "temperature_2m_mean,precipitation_sum,soil_moisture_0_to_10cm_mean"
-MODELS = (
+VARIABLES: str = "temperature_2m_mean,precipitation_sum,soil_moisture_0_to_10cm_mean"
+MODELS: str = (
     "CMCC_CM2_VHR4,FGOALS_f3_H,HiRAM_SIT_HR," "MRI_AGCM3_2_S,EC_Earth3P_HR,MPI_ESM1_2_XR,NICAM16_8S"
 )
 
 
-def get_data_meteo_api(city, start_date, end_date):
+def get_data_meteo_api(city: str, start_date: str, end_date: str):
     """
     Get API url based on city, start_date and end date
     """
@@ -47,7 +48,7 @@ def get_data_meteo_api(city, start_date, end_date):
     return request_with_cooloff(api_url)
 
 
-def _request_with_cooloff(api_url, num_attempts):
+def _request_with_cooloff(api_url: str, num_attempts: int):
     cooloff = 1
 
     for call_count in range(cooloff):
@@ -88,12 +89,12 @@ def request_with_cooloff(url, num_attempts=10):
     return json.loads(_request_with_cooloff(url, num_attempts).content.decode("utf-8"))
 
 
-def get_yearly_mean_std(data_dict, variable_dict):
+def get_yearly_mean_std(data_dict: dict, variable_dict: dict):
     """
     Get a df with yearly mean and std for every variable
     """
 
-    df = pd.DataFrame(data_dict["daily"], index=pd.to_datetime(data_dict["daily"]["time"]))
+    df = pd.DataFrame(data_dict, index=pd.to_datetime(data_dict["time"]))
     df.drop(columns="time", inplace=True)
 
     for variable in variable_dict.keys():
@@ -104,7 +105,7 @@ def get_yearly_mean_std(data_dict, variable_dict):
     return df.groupby(df.index.year).agg(["mean", "std"])
 
 
-def plot_data(df, variable_dict, city):
+def plot_data(df: pd.DataFrame, variable_dict: dict, city: str):
     """
     Plot variables for every city
     """
@@ -156,7 +157,7 @@ def main():
             variable_dict[variable] = value
             # 'temperature_2m_mean': '°C'
 
-        df = get_yearly_mean_std(data_dict, variable_dict)
+        df = get_yearly_mean_std(data_dict["daily"], variable_dict)
         plot_data(df, variable_dict, city)
 
 
