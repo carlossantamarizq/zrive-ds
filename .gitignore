@@ -9,7 +9,7 @@ Plots
 # Files
 *.png
 
-src/module_1/test.ipynb
+test.ipynb
 
 # C extensions
 *.so
