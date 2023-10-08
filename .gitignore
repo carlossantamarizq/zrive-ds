@@ -3,6 +3,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+
+src/module_2/data
+src/module_2/data-modified
+
+
 # C extensions
 *.so
 
