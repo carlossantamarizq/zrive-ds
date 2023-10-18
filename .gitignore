@@ -5,6 +5,14 @@ __pycache__/
 
 # C extensions
 *.so
+*.csv
+*.txt
+
+*.parquet
+*.txt
+*.csv
+
+src/module_2/get_data.py
 
 # Distribution / packaging
 .Python
