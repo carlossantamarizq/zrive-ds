@@ -3,8 +3,18 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Own folders
+Plots
+
+# Files
+*.png
+
+test.ipynb
+
 # C extensions
 *.so
+*.txt
+*.csv
 
 # Distribution / packaging
 .Python
@@ -50,6 +60,11 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+git
+libbz2-dev
+libncursesw5-dev
+poetry.lock
+tries/
 
 # Translations
 *.mo
